@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Configuration>
+  <ViewDefinitions>
+    <View>
+      <Name>Match</Name>
+      <ViewSelectedBy>
+        <TypeName>Match</TypeName>
+      </ViewSelectedBy>
+      <CustomControl>
+        <CustomEntries>
+          <CustomEntry>
+            <CustomItem>
+              <ExpressionBinding>
+                <ScriptBlock>
+                  $a = $_
+                  switch( $_.GetType() ) {
+                    "TableNameMatch" {
+                      "Table name `"$($a.Table)`" matches." 
+                    }
+                    "FieldNameMatch" {
+                      "Field name `"$($a.Field)`" in $($a.Table) matches."
+                    }
+                    "FieldValueMatch" {
+                      $str = $a.Value
+                      if( $str.Length -gt 200 ) {
+                        $str = $str.Substring(0, 200) + "..."
+                      }
+                      "Row $($a.Row) of $($a.Table).$($a.Field) matches: `"$str`""
+                    }
+                  }
+                </ScriptBlock>
+              </ExpressionBinding>
+            </CustomItem>
+          </CustomEntry>
+        </CustomEntries>
+      </CustomControl>
+    </View>
+  </ViewDefinitions>
+</Configuration>
