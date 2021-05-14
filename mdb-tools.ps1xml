@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Configuration>
   <ViewDefinitions>
+
     <View>
       <Name>Match</Name>
       <ViewSelectedBy>
@@ -35,5 +36,149 @@
         </CustomEntries>
       </CustomControl>
     </View>
+    
+    <View>
+      <Name>Difference</Name>
+      <ViewSelectedBy>
+        <TypeName>Difference</TypeName>
+      </ViewSelectedBy>
+      <CustomControl>
+        <CustomEntries>
+          <CustomEntry>
+            <CustomItem>
+              <ExpressionBinding>
+                <ScriptBlock>
+                  $t = $_.GetType().ToString()
+                  if( $t -eq "AdditionalTable" ) {
+                    "(Schema) $($_.DatabaseName) has an additional table $($_.TableName)"
+                  } elseif( $t -eq "AdditionalField" ) {
+                    "(Schema) $($_.DatabaseName) has additional field in $($_.TableName): $($_.FieldName)"
+                  } elseif( $t -eq "FieldDesignDifference" ) {
+                    "$($_.TableName).$($_.FieldName) - `"$($_.FieldAttribute)`" differs: $($_.Value1) - $($_.Value2)"
+                  } elseif( $t -eq "RowDifferences" ) {
+                    $a = $_
+                    $out = ""
+
+                    $fieldSizes = @()
+                    for( $i = 0; $i -lt $a.Fields.Count; $i++ ) {
+                      $fieldSize = $a.Fields[$i].Length
+                      $maxSize = 15
+                      if( $maxSize -lt $fieldSize ) { $maxSize = $fieldSize }
+
+                      for( $j = 0; $j -lt $a.Rows1.Count; $j++ ) {
+                        if( $a.Rows1[$j].Data[$i].Length -gt $fieldSize ) {
+                          $fieldSize = $a.Rows1[$j].Data[$i].Length
+                        }
+                      }
+                      for( $j = 0; $j -lt $a.Rows2.Count; $j++ ) {
+                        if( $a.Rows2[$j].Data[$i].Length -gt $fieldSize ) {
+                          $fieldSize = $a.Rows2[$j].Data[$i].Length
+                        }
+                      }
+
+                      if( $fieldSize -gt $maxSize ) { $fieldSize = $maxSize }
+                      $fieldSizes += $fieldSize
+                    }  
+
+                    $out += "[Differences in $($a.Name)]`n"
+                    $out += "   Row"
+                    for( $i = 0; $i -lt $a.Fields.Count; $i++ ) {
+                      $formatted = $a.Fields[$i]
+                      if( $formatted.Length -gt $fieldSizes[$i] ) {
+                        $formatted = $formatted.SubString( 0, $fieldSizes[$i] )
+                      } else {
+                        $formatted = $formatted.PadLeft( $fieldSizes[$i], " " )
+                      }
+                      
+                      $out += (" " + $formatted)
+                    }
+                    $out += "`n"
+                    $out += "------"
+                    for( $i = 0; $i -lt $a.Fields.Count; $i++ ) {
+                      $out += (" " + "".PadLeft( $fieldSizes[$i], "-" ))
+                    }
+                    
+                    for( $i = 0; $i -lt $a.Rows1.Count; $i++ ) {
+                      $out += "`n"
+
+                      $out += (([string]$a.Rows1[$i].RowIndex).PadLeft(6))
+                      for( $j = 0; $j -lt $a.Fields.Count; $j++ ) {
+                        $diff = $a.Rows1[$i].Data[$j] -ne $a.Rows2[$i].Data[$j]
+                        
+                        $v = [string]$a.Rows1[$i].Data[$j]
+                        if( $v.Length -gt $fieldSizes[$j] ) { $v = $v.Substring( 0, $fieldSizes[$j] ) }
+                        $v = $v.PadLeft( $fieldSizes[$j], ' ' )
+                        if( $diff ) { $v = "$([char]27)[5;93m$v$([char]27)[0m" }
+                        $out += (" $v")
+                      }
+
+                      $out += "`n"
+                      $out += "      "
+                      for( $j = 0; $j -lt $a.Fields.Count; $j++ ) {
+                        $diff = $a.Rows2[$i].Data[$j] -ne $a.Rows1[$i].Data[$j]
+                        
+                        $v = [string]$a.Rows2[$i].Data[$j]
+                        if( $v.Length -gt $fieldSizes[$j] ) { $v = $v.Substring( 0, $fieldSizes[$j] ) }
+                        $v = $v.PadLeft( $fieldSizes[$j], ' ' )
+                        if( $diff ) { $v = "$([char]27)[5;93m$v$([char]27)[0m" }
+                        $out += (" $v")
+                      }
+                    }
+                    
+                    $out += "`n"
+                    if( $a.Truncated ) {
+                      $out += "---this result was truncated---`n"
+                    }
+
+                    $out
+                  }
+                </ScriptBlock>
+              </ExpressionBinding>
+            </CustomItem>
+          </CustomEntry>
+        </CustomEntries>
+      </CustomControl>
+    </View>
+
+    <!-- <View>
+      <Name>Difference</Name>
+      <ViewSelectedBy>
+        <TypeName>Difference</TypeName>
+      </ViewSelectedBy>
+      <CustomControl>
+        <CustomEntries>
+          <CustomEntry>
+            <CustomItem>
+              <ExpressionBinding>
+                <ScriptBlock>
+                  "(Schema) $($_.DatabaseName) has additional field in $($_.TableName): $($_.FieldName)"
+                </ScriptBlock>
+              </ExpressionBinding>
+            </CustomItem>
+          </CustomEntry>
+        </CustomEntries>
+      </CustomControl>
+    </View>
+
+    <View>
+      <Name>FieldDesignDifference</Name>
+      <ViewSelectedBy>
+        <TypeName>FieldDesignDifference</TypeName>
+      </ViewSelectedBy>
+      <CustomControl>
+        <CustomEntries>
+          <CustomEntry>
+            <CustomItem>
+              <ExpressionBinding>
+                <ScriptBlock>
+                  "$($_.TableName).$($_.FieldName) - `"$($_.FieldAttribute)`" differs: $($_.Value1) - $($_.Value2)"
+                </ScriptBlock>
+              </ExpressionBinding>
+            </CustomItem>
+          </CustomEntry>
+        </CustomEntries>
+      </CustomControl>
+    </View>
+     -->
   </ViewDefinitions>
 </Configuration>
