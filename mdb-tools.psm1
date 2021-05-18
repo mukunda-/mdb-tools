@@ -6,47 +6,6 @@
 # Handy functions for inspecting MDB database files and differences.
 #-----------------------------------------------------------------------------------------
 
-class Difference {}
-#-----------------------------------------------------------------------------------------
-class AdditionalTable : Difference {
-   [string]$DatabaseName
-   [string]$TableName
-   AdditionalTable( [string]$DatabaseName, [string]$TableName ) {
-      $this.DatabaseName = $DatabaseName
-      $this.TableName    = $TableName
-   }
-}
-
-#-----------------------------------------------------------------------------------------
-class AdditionalField : Difference {
-   [string]$DatabaseName
-   [string]$TableName
-   [string]$FieldName
-   AdditionalField( [string]$DatabaseName, [string]$TableName,
-                                   [string]$FieldName ) {
-      $this.DatabaseName = $DatabaseName
-      $this.TableName    = $TableName
-      $this.FieldName    = $FieldName
-   }
-}
-
-#-----------------------------------------------------------------------------------------
-class FieldDesignDifference : Difference {
-   [string]$TableName
-   [string]$FieldName
-   [string]$FieldAttribute
-   [string]$Value1
-   [string]$Value2
-   FieldDesignDifference( [string]$TableName, [string]$FieldName, [string]$FieldAttribute,
-                          [string]$Value1, [string]$Value2 ) {
-      $this.TableName      = $TableName
-      $this.FieldName      = $FieldName
-      $this.FieldAttribute = $FieldAttribute
-      $this.Value1         = $Value1
-      $this.Value2         = $Value2
-   }
-}
-
 #-----------------------------------------------------------------------------------------
 # Outputs any difference in the table listing.
 Function Get-Tables-Diff {
@@ -104,7 +63,6 @@ function Get-Table-Fields-Diff {
       $comparisons = ("Type", "Size", "DefaultValue", "Required")#, "AllowZeroLength")
       $comparisons | %{
          if( $ca.$_ -ne $cb.$_ ) {
-            #[FieldDesignDifference]::new( $table, $fieldname, $_, $ca.$_, $cb.$_ )
             Write-Output "$table.$fieldname - `"$_`" differs: $($ca.$_) - $($cb.$_)"
          }
       }
@@ -136,7 +94,7 @@ class RowData {
 }
 
 #-----------------------------------------------------------------------------------------
-class RowDifferences : Difference {
+class RowDifferences {
    [string[]]$Name
    [string[]]$Fields
    [RowData[]]$Rows1
@@ -146,96 +104,101 @@ class RowDifferences : Difference {
       $this.Name   = $Name
       $this.Fields = $Fields
    }
+
+   #--------------------------------------------------------------------------------------
+   # Using the 5.1 format xml file is so nasty, and so is making classes for every output
+   #  type. Sure, that's more flexible, but nobody is really going to use this script for
+   #  more than some simple preliminary checks before closer inspection with MS Access.
+   #
+   # So, we're just going to use this to print output as strings.
+   # The other functions also just output strings.
+   [string]Print() {
+      
+      $a = $this
+      $out = ""
+
+      $fieldSizes = @()
+      for( $i = 0; $i -lt $a.Fields.Count; $i++ ) {
+         $fieldSize = $a.Fields[$i].Length
+         $maxSize = 15
+         if( $maxSize -lt $fieldSize ) { $maxSize = $fieldSize }
+
+         for( $j = 0; $j -lt $a.Rows1.Count; $j++ ) {
+            if( $a.Rows1[$j].Data[$i].Length -gt $fieldSize ) {
+               $fieldSize = $a.Rows1[$j].Data[$i].Length
+            }
+         }
+         for( $j = 0; $j -lt $a.Rows2.Count; $j++ ) {
+            if( $a.Rows2[$j].Data[$i].Length -gt $fieldSize ) {
+               $fieldSize = $a.Rows2[$j].Data[$i].Length
+            }
+         }
+
+         if( $fieldSize -gt $maxSize ) { $fieldSize = $maxSize }
+         $fieldSizes += $fieldSize
+      }  
+
+      $out += "[Differences in $($a.Name)]`n"
+      $out += "   Row"
+      for( $i = 0; $i -lt $a.Fields.Count; $i++ ) {
+         $formatted = $a.Fields[$i]
+         if( $formatted.Length -gt $fieldSizes[$i] ) {
+            $formatted = $formatted.SubString( 0, $fieldSizes[$i] )
+         } else {
+            $formatted = $formatted.PadLeft( $fieldSizes[$i], " " )
+         }
+         
+         $out += (" " + $formatted)
+      }
+      $out += "`n"
+      $out += "------"
+      for( $i = 0; $i -lt $a.Fields.Count; $i++ ) {
+         $out += (" " + "".PadLeft( $fieldSizes[$i], "-" ))
+      }
+        
+      for( $i = 0; $i -lt $a.Rows1.Count; $i++ ) {
+         $out += "`n"
+
+         $out += (([string]$a.Rows1[$i].RowIndex).PadLeft(6))
+         for( $j = 0; $j -lt $a.Fields.Count; $j++ ) {
+            $diff = $a.Rows1[$i].Data[$j] -ne $a.Rows2[$i].Data[$j]
+            
+            $v = [string]$a.Rows1[$i].Data[$j]
+            if( $v.Length -gt $fieldSizes[$j] ) { $v = $v.Substring( 0, $fieldSizes[$j] ) }
+            $v = $v.PadLeft( $fieldSizes[$j], ' ' )
+            if( $diff ) { $v = "$([char]27)[5;93m$v$([char]27)[0m" }
+            $out += (" $v")
+         }
+
+         $out += "`n"
+         $out += "      "
+         for( $j = 0; $j -lt $a.Fields.Count; $j++ ) {
+            $diff = $a.Rows2[$i].Data[$j] -ne $a.Rows1[$i].Data[$j]
+            
+            $v = [string]$a.Rows2[$i].Data[$j]
+            if( $v.Length -gt $fieldSizes[$j] ) { $v = $v.Substring( 0, $fieldSizes[$j] ) }
+            $v = $v.PadLeft( $fieldSizes[$j], ' ' )
+            if( $diff ) { $v = "$([char]27)[5;93m$v$([char]27)[0m" }
+            $out += (" $v")
+         }
+      }
+        
+      $out += "`n"
+      if( $a.Truncated ) {
+         $out += "---this result was truncated---`n"
+      }
+      
+      return $out
+   }
 }
 
-function Test {
-   Param($a)
-   # Are we allowed to use write-host in here? Maybe not. :)
-                 
-#$a = $_
-                  $out = ""
-
-                  $fieldSizes = @()
-                  for( $i = 0; $i -lt $a.Fields.Count; $i++ ) {
-                    $fieldSize = $a.Fields[$i].Length
-                    $maxSize = 15
-                    if( $maxSize -lt $fieldSize ) { $maxSize = $fieldSize }
-
-                    for( $j = 0; $j -lt $a.Rows1.Count; $j++ ) {
-                      if( $a.Rows1[$j].Data[$i].Length -gt $fieldSize ) {
-                        $fieldSize = $a.Rows1[$j].Data[$i].Length
-                      }
-                    }
-                    for( $j = 0; $j -lt $a.Rows2.Count; $j++ ) {
-                      if( $a.Rows2[$j].Data[$i].Length -gt $fieldSize ) {
-                        $fieldSize = $a.Rows2[$j].Data[$i].Length
-                      }
-                    }
-
-                    if( $fieldSize -gt $maxSize ) { $fieldSize = $maxSize }
-                    $fieldSizes += $fieldSize
-                  }  
-
-                  $out += "[Differences in $($a.Name)]`n"
-                  $out += "   Row"
-                  for( $i = 0; $i -lt $a.Fields.Count; $i++ ) {
-                    $formatted = $a.Fields[$i]
-                    if( $formatted.Length -gt $fieldSizes[$i] ) {
-                      $formatted = $formatted.SubString( 0, $fieldSizes[$i] )
-                    } else {
-                      $formatted = $formatted.PadLeft( $fieldSizes[$i], " " )
-                    }
-                    
-                    $out += (" " + $formatted)
-                  }
-                  $out += "`n"
-                  $out += "------"
-                  for( $i = 0; $i -lt $a.Fields.Count; $i++ ) {
-                    $out += (" " + "".PadLeft( $fieldSizes[$i], "-" ))
-                  }
-                  
-                  for( $i = 0; $i -lt $a.Rows1.Count; $i++ ) {
-                    $out += "`n"
-
-                    $out += (([string]$a.Rows1[$i].RowIndex).PadLeft(6))
-                    for( $j = 0; $j -lt $a.Fields.Count; $j++ ) {
-                       $diff = $a.Rows1[$i].Data[$j] -ne $a.Rows2[$i].Data[$j]
-                       
-                       $v = [string]$a.Rows1[$i].Data[$j]
-                       if( $v.Length -gt $fieldSizes[$j] ) { $v = $v.Substring( 0, $fieldSizes[$j] ) }
-                       $v = $v.PadLeft( $fieldSizes[$j], ' ' )
-                       if( $diff ) { $v = "$([char]27)[5;33m$v$([char]27)[0m" }
-                       $out += (" $v")
-                    }
-
-                    $out += "`n"
-                    $out += "      "
-                    for( $j = 0; $j -lt $a.Fields.Count; $j++ ) {
-                       $diff = $a.Rows2[$i].Data[$j] -ne $a.Rows1[$i].Data[$j]
-                       
-                       $v = [string]$a.Rows2[$i].Data[$j]
-                       if( $v.Length -gt $fieldSizes[$j] ) { $v = $v.Substring( 0, $fieldSizes[$j] ) }
-                       $v = $v.PadLeft( $fieldSizes[$j], ' ' )
-                       if( $diff ) { $v = "$([char]27)[5;93m$v$([char]27)[0m" }
-                       $out += (" $v")
-                    }
-                  }
-                  
-                  if( $a.Truncated ) {
-                     $out += "`n---this result was truncated---"
-                  }
-
-                  $out
-                  
-}
-
-Function MDBDiff {
+Function Get-MDBDiff {
    <#
       .SYNOPSIS
          Compares two MS Access database files (MDB) and prints differences.
 
       .EXAMPLE
-         MDBDiff .\database1.mdb .\database2.mdb
+         Get-MDBDiff .\database1.mdb .\database2.mdb
 
          Scans the two MDB files and prints a report of differences.
    #>
@@ -243,21 +206,7 @@ Function MDBDiff {
       [string]$Path1,
       [string]$Path2
    )
-   #   [AdditionalField]::new( "DB2", "asdf", "dfgh" )
-    #        [FieldDesignDifference]::new( "hh", "ghj", "yuy", "kk", ";l" )
 
-   $a = [RowDifferences]::new( "tb_General", ("A", "B", "C") )
-   $a.Rows1 += [RowData]::new( 1, ("Hello", "Kitty", "Goodbye") )
-   $a.Rows2 += [RowData]::new( 1, ("Hello1", "Kitty", "Goodbye") )
-   $a.Rows1 += [RowData]::new( 1, ("11", "6676732457247", "Goodbye") )
-   $a.Rows2 += [RowData]::new( 1, ("51235", "Kitty", "Goodbye") )
-   $a.Rows1 += [RowData]::new( 1, ("51235", "Kitty", "Goodbye") )
-   $a.Rows2 += [RowData]::new( 1, ("51235", "Kitty", "Goodbye1") )
-   $a.Truncated = $true
-   #exit
-   #$a
- #   Test $a
-  # return
    # Initialize DB Engine
    $dbe = New-Object -comobject DAO.DBEngine.120
 
@@ -270,25 +219,24 @@ Function MDBDiff {
    $db1 = $dbe.OpenDatabase( (Resolve-Path $Path1), $false, $true )
    $db2 = $dbe.OpenDatabase( (Resolve-Path $Path2), $false, $true )
 
+   # Print table diffs (additional/missing table names).
    Get-Tables-Diff $db1 $db2
    
-   #--------------------------------------------------------------------------------------
-   # Table field diffs.
-                                    # Exclude any system tables.
+   # Table field differences.
+                                    # {Exclude any system tables here.}
    Select-Common-Tables $db1 $db2 | Where-Object {-not $_.StartsWith("MSys")} | %{
-
       Get-Table-Fields-Diff $_ $db1 $db2
    }
 
    #--------------------------------------------------------------------------------------
    # Bulk of the scan.
-                                    # Exclude any system tables.
+                                    # {Exclude any system tables.}
    Select-Common-Tables $db1 $db2 | Where-Object {-not $_.StartsWith("MSys")} | %{
       $table = $_
    
       $fields = Select-Common-Fields $table $db1 $db2
 
-      # Potentially unsafe table injection method. Is there a better way?
+      # Potentially unsafe tablename injection. Is there a better way?
       $fieldsquery = ($fields | %{"[$_]"}) -join ","
       $rs1 = $db1.OpenRecordset( "select $fieldsquery FROM $_" )
       $rs2 = $db2.OpenRecordset( "select $fieldsquery FROM $_" )
@@ -338,12 +286,12 @@ Function MDBDiff {
          if( $stopping ) { break }
       }
       
-      if( $differences.Rows1.Count -gt 0 ) {
-         Write-Output $differences
-      }
-
       $rs1.Close()
       $rs2.Close()
+
+      if( $differences.Rows1.Count -gt 0 ) {
+         $differences.Print()
+      }
    }
 
    $db1.Close()
@@ -378,6 +326,8 @@ class FieldNameMatch : Match {
 }
 
 #-----------------------------------------------------------------------------------------
+# A bit of a fun exercise, these Match classes are defined in mdb-tools.ps1xml for
+#  formatting output.
 class FieldValueMatch : Match {
    [string]$Table
    [string]$Field
@@ -394,7 +344,7 @@ class FieldValueMatch : Match {
 }
 
 #-----------------------------------------------------------------------------------------
-Function Search-MDBDatabase {
+Function Search-MDB {
    <#
       .SYNOPSIS
          Searches for a regex string in an MDB file.
@@ -415,7 +365,7 @@ Function Search-MDBDatabase {
          Default true; search ALL field/cell data values for matches.
 
       .EXAMPLE
-         Search-MDBDatabase .\database1.mdb "test"
+         Search-MDB .\database1.mdb "test"
 
          Searches the database for the string "test". Will search in table names, 
    #>
