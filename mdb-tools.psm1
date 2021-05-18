@@ -52,18 +52,20 @@ class FieldDesignDifference : Difference {
 Function Get-Tables-Diff {
    Param( $db1, $db2 )
 
-   $tables1 = $db1.TableDefs | %{ $_.Name }
-   $tables2 = $db2.TableDefs | %{ $_.Name }
+   $tables1 = $db1.TableDefs | %{ $_.Name.ToLower() }
+   $tables2 = $db2.TableDefs | %{ $_.Name.ToLower() }
 
    $tables1 | %{
       if( $tables2 -notcontains $_ ) {
-         [AdditionalTable]::new( "DB1", $_ )
+         Write-Output "(Schema) DB1 has additional table $_"
+         #[AdditionalTable]::new( "DB1", $_ )
       }
    }
 
    $tables2 | %{
       if( $tables1 -notcontains $_ ) {
-         [AdditionalTable]::new( "DB2", $_ )
+         Write-Output "(Schema) DB2 has additional table $_"
+         #[AdditionalTable]::new( "DB2", $_ )
       }
    }
 }
@@ -86,13 +88,13 @@ function Get-Table-Fields-Diff {
    $table1 = $db1.TableDefs | Where-Object {$_.Name -eq $table}
    $table2 = $db2.TableDefs | Where-Object {$_.Name -eq $table}
 
-   $not_found = [System.Collections.ArrayList]@(($table2.Fields | %{ $_.Name }))
+   $not_found = [System.Collections.ArrayList]@(($table2.Fields | %{ $_.Name.ToLower() }))
    
    foreach( $ca in $table1.Fields ) {
-      $fieldname = $ca.Name
-      $cb = $table2.Fields | Where-Object {$_.Name -eq $fieldname}
+      $fieldname = $ca.Name.ToLower()
+      $cb = $table2.Fields | Where-Object {$_.Name.ToLower() -eq $fieldname}
       if( -not $cb ) {
-         [AdditionalField]::new( "DB1", $table, $fieldname )
+         Write-Output "DB1 has additional field in ${table}: $fieldname"
          continue
       }
 
@@ -102,14 +104,14 @@ function Get-Table-Fields-Diff {
       $comparisons = ("Type", "Size", "DefaultValue", "Required")#, "AllowZeroLength")
       $comparisons | %{
          if( $ca.$_ -ne $cb.$_ ) {
-            [FieldDesignDifference]::new( $table, $fieldname, $_, $ca.$_, $cb.$_ )
+            #[FieldDesignDifference]::new( $table, $fieldname, $_, $ca.$_, $cb.$_ )
             Write-Output "$table.$fieldname - `"$_`" differs: $($ca.$_) - $($cb.$_)"
          }
       }
    }
    
    foreach( $a in $not_found ) {
-      [AdditionalField]::new( "DB2", $table, $a )
+      Write-Output "DB2 has additional field in ${table}: $a"
    }
 }
 
@@ -227,15 +229,15 @@ function Test {
                   
 }
 
-Function Compare-MDBDatabase {
+Function MDBDiff {
    <#
       .SYNOPSIS
          Compares two MS Access database files (MDB) and prints differences.
 
       .EXAMPLE
-         Compare-MDBDatabase .\database1.mdb .\database2.mdb
+         MDBDiff .\database1.mdb .\database2.mdb
 
-         Compares the two database files given and prints differences to the output.
+         Scans the two MDB files and prints a report of differences.
    #>
    Param(
       [string]$Path1,
@@ -271,11 +273,18 @@ Function Compare-MDBDatabase {
    Get-Tables-Diff $db1 $db2
    
    #--------------------------------------------------------------------------------------
+   # Table field diffs.
+                                    # Exclude any system tables.
+   Select-Common-Tables $db1 $db2 | Where-Object {-not $_.StartsWith("MSys")} | %{
+
+      Get-Table-Fields-Diff $_ $db1 $db2
+   }
+
+   #--------------------------------------------------------------------------------------
    # Bulk of the scan.
                                     # Exclude any system tables.
    Select-Common-Tables $db1 $db2 | Where-Object {-not $_.StartsWith("MSys")} | %{
       $table = $_
-      Get-Table-Fields-Diff $table $db1 $db2
    
       $fields = Select-Common-Fields $table $db1 $db2
 
